@@ -1,0 +1,12 @@
+---
+- name: Test if the pg_stat_statements extensions have been enabled
+  shell: psql -c "SELECT * FROM pg_extension;"
+  args:
+    executable: /bin/bash
+  register: postgresql_plugin_list
+  become: yes
+  become_user: postgres
+  become_method: sudo
+  changed_when: False
+  failed_when:
+    - '"pg_stat_statements" not in postgresql_plugin_list.stdout'
