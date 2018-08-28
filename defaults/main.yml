@@ -1,2 +1,7 @@
 ---
-# defaults file for ansible-role-pg-stat-statements
+pg_stat_statements_postgresql_10_repo_url: https://download.postgresql.org/pub/repos/yum/10/redhat/rhel-7-x86_64/pgdg-centos10-10-2.noarch.rpm
+
+pg_stat_statements_max: 5000
+pg_stat_statements_track: 'top'
+pg_stat_statements_track_utility: 'on'
+pg_stat_statements_save: 'on'

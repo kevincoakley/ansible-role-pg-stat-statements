@@ -1,2 +1,101 @@
 ---
-# tasks file for ansible-role-pg-stat-statements
+- name: Verify postgresql 10 is installed
+  stat:
+    path: /var/lib/pgsql/10/data/PG_VERSION
+  register: pg_version
+  failed_when: pg_version.stat.exists == False
+  changed_when: False
+
+- name: Install postgresql 10 yum repository
+  package:
+    name: "{{ pg_stat_statements_postgresql_10_repo_url }}"
+    state: present
+
+- name: Install postgresql10-contrib for postgresql 10
+  package:
+    name: postgresql10-contrib
+    state: present
+
+- name: Check if shared_preload_libraries already exists in postgresql.conf
+  shell: grep "^shared_preload_libraries" /var/lib/pgsql/10/data/postgresql.conf
+  args:
+    executable: /bin/bash
+  register: shared_preload_libraries_return
+  check_mode: no
+  ignore_errors: yes
+  changed_when: no
+
+- name: Add the shared_preload_libraries config for enabling the pg_stat_statements shared libraries (New Line)
+  lineinfile:
+    path: /var/lib/pgsql/10/data/postgresql.conf
+    regexp: ^shared_preload_libraries =
+    insertafter: '^# Add settings for extensions here'
+    line: shared_preload_libraries = 'pg_stat_statements'
+    backup: yes
+  when: shared_preload_libraries_return.rc == 1
+  notify: Restart postgresql
+
+- name: Update the shared_preload_libraries config for enabling the pg_stat_statements shared libraries (Existing Line)
+  lineinfile:
+    path: /var/lib/pgsql/10/data/postgresql.conf
+    regexp: ^((?=shared_preload_libraries)(?!.*pg_stat_statements).*\s*=\s*'.*)('.*)
+    line: \1, pg_stat_statements\2
+    backrefs: yes
+    backup: yes
+  when: shared_preload_libraries_return.rc == 0
+  notify: Restart postgresql
+
+- name: Config for pg_stat_statements.max
+  lineinfile:
+    path: /var/lib/pgsql/10/data/postgresql.conf
+    regexp: ^pg_stat_statements.max
+    insertafter: '^# Add settings for extensions here'
+    line: "pg_stat_statements.max = {{ pg_stat_statements_max }}"
+  notify: Restart postgresql
+
+- name: Config for pg_stat_statements.track
+  lineinfile:
+    path: /var/lib/pgsql/10/data/postgresql.conf
+    regexp: ^pg_stat_statements.track
+    insertafter: '^# Add settings for extensions here'
+    line: "pg_stat_statements.track = {{ pg_stat_statements_track }}"
+  notify: Restart postgresql
+
+- name: Config for pg_stat_statements.track_utility
+  lineinfile:
+    path: /var/lib/pgsql/10/data/postgresql.conf
+    regexp: ^pg_stat_statements.track_utility
+    insertafter: '^# Add settings for extensions here'
+    line: "pg_stat_statements.track_utility = {{ pg_stat_statements_track_utility }}"
+  notify: Restart postgresql
+
+- name: Config for pg_stat_statements.save
+  lineinfile:
+    path: /var/lib/pgsql/10/data/postgresql.conf
+    regexp: ^pg_stat_statements.save
+    insertafter: '^# Add settings for extensions here'
+    line: "pg_stat_statements.save = {{ pg_stat_statements_save }}"
+  notify: Restart postgresql
+
+- name: Get a list of postgresql extension
+  shell: psql -c "SELECT * FROM pg_extension;"
+  args:
+    executable: /bin/bash
+  register: postgresql_plugin_list
+  become: yes
+  become_user: postgres
+  become_method: sudo
+  changed_when: False
+
+- name: Enable the pg_partman extension
+  shell: "psql -c \"CREATE EXTENSION pg_stat_statements;\""
+  args:
+    executable: /bin/bash
+  register: enable_pg_stat_statements
+  become: yes
+  become_user: postgres
+  become_method: sudo
+  failed_when: '"CREATE EXTENSION" not in enable_pg_stat_statements.stdout'
+  changed_when: False
+  when:
+  - '"pg_stat_statements" not in postgresql_plugin_list.stdout'
